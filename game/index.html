@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Solmar Heat — an open-world crime game</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0a0e14; font-family: 'Segoe UI', Arial, sans-serif; color: #fff; }
+  #app, #app canvas { position: fixed; inset: 0; display: block; }
+  .hidden { display: none !important; }
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #hud-top-right { position: absolute; top: 14px; right: 16px; text-align: right; }
+  #hud-money { font-size: 28px; font-weight: 800; color: #7dff9a; text-shadow: 0 2px 4px #000; }
+  #hud-clock { font-size: 18px; font-weight: 700; text-shadow: 0 2px 4px #000; }
+  #hud-stars { font-size: 22px; letter-spacing: 2px; color: #ffd23b; text-shadow: 0 2px 4px #000; }
+  #hud-stars.hot { animation: pulse 0.7s infinite alternate; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: 0.45; } }
+  #hud-top-left { position: absolute; top: 14px; left: 16px; width: 230px; }
+  .bar-label { font-size: 11px; letter-spacing: 1px; opacity: 0.9; text-shadow: 0 1px 3px #000; }
+  .bar { height: 12px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.5); border-radius: 3px; margin: 2px 0 8px; overflow: hidden; }
+  .bar > div { height: 100%; }
+  #hud-health-fill { background: #37d67a; width: 100%; }
+  #hud-armor-fill { background: #5aa9ff; width: 0%; }
+  #hud-bottom-right { position: absolute; right: 16px; bottom: 14px; text-align: right; }
+  #hud-speed { font-size: 44px; font-weight: 800; line-height: 1; text-shadow: 0 2px 6px #000; }
+  #hud-speed-unit { font-size: 13px; opacity: 0.85; }
+  #minimap { position: absolute; left: 16px; bottom: 14px; width: 180px; height: 180px; border: 2px solid rgba(255,255,255,0.75); border-radius: 6px; background: #3f7d3c; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+  #hud-objective { position: absolute; left: 16px; bottom: 204px; max-width: 320px; font-size: 14px; background: rgba(0,0,0,0.55); padding: 8px 10px; border-left: 3px solid #ffd23b; border-radius: 3px; }
+  #hud-toast { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); font-size: 17px; font-weight: 700; background: rgba(0,0,0,0.65); padding: 8px 16px; border-radius: 4px; opacity: 0; transition: opacity 0.25s; }
+  #hud-toast.show { opacity: 1; }
+  #hud-busted-timer { position: absolute; top: 140px; left: 50%; transform: translateX(-50%); font-size: 20px; font-weight: 800; color: #ff5566; background: rgba(0,0,0,0.65); padding: 8px 16px; border-radius: 4px; display: none; }
+  #hud-hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 12px; opacity: 0.75; text-shadow: 0 1px 3px #000; }
+  /* ---------- Screens ---------- */
+  .screen { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; flex-direction: column; background: linear-gradient(160deg, rgba(10,16,28,0.88), rgba(60,20,40,0.82)); text-align: center; padding: 20px; }
+  .screen h1 { font-size: 64px; margin: 0; letter-spacing: 4px; color: #ffd23b; text-shadow: 0 4px 0 #c23b3b, 0 8px 24px #000; }
+  .screen h2 { font-size: 40px; margin: 0 0 10px; letter-spacing: 3px; color: #ff5566; text-shadow: 0 3px 12px #000; }
+  .screen p { max-width: 560px; font-size: 16px; line-height: 1.5; opacity: 0.95; }
+  .screen .controls { font-size: 13px; opacity: 0.8; line-height: 1.8; margin-top: 8px; }
+  .btn { pointer-events: auto; cursor: pointer; font-size: 18px; font-weight: 700; padding: 12px 34px; margin: 6px; border: none; border-radius: 6px; background: #ffd23b; color: #141414; box-shadow: 0 4px 0 #b89a1e; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #b89a1e; }
+  .btn.secondary { background: #e8e8e8; box-shadow: 0 4px 0 #9a9a9a; }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud" class="hidden">
+  <div id="hud-top-left">
+    <div class="bar-label">HEALTH</div>
+    <div class="bar"><div id="hud-health-fill"></div></div>
+    <div class="bar-label">ARMOR</div>
+    <div class="bar"><div id="hud-armor-fill"></div></div>
+  </div>
+  <div id="hud-top-right">
+    <div id="hud-money">$120</div>
+    <div id="hud-clock">09:00</div>
+    <div id="hud-stars">☆☆☆☆☆</div>
+  </div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="hud-objective">Explore Solmar City. Find a car and press E to take it.</div>
+  <div id="hud-toast"></div>
+  <div id="hud-busted-timer"></div>
+  <div id="hud-bottom-right">
+    <div id="hud-speed">0</div>
+    <div id="hud-speed-unit">km/h</div>
+  </div>
+  <div id="hud-hint">WASD move &nbsp;·&nbsp; Shift run &nbsp;·&nbsp; E enter / exit car &nbsp;·&nbsp; Space handbrake &nbsp;·&nbsp; Drag mouse to look &nbsp;·&nbsp; Esc pause</div>
+</div>
+
+<div id="screen-start" class="screen">
+  <h1>SOLMAR HEAT</h1>
+  <p>Sun, sea, and a $5,000 debt to Mara Quinn. Solmar City is yours to take —
+     steal a car, outrun the Solmar PD, and make the money back before the heat catches you.</p>
+  <div>
+    <button id="btn-new" class="btn">NEW GAME</button>
+    <button id="btn-continue" class="btn secondary">CONTINUE</button>
+  </div>
+  <div class="controls">
+    WASD — move / drive &nbsp;·&nbsp; Shift — run &nbsp;·&nbsp; E — steal / exit car<br>
+    Space — handbrake &nbsp;·&nbsp; Mouse drag — look around &nbsp;·&nbsp; Esc — pause
+  </div>
+  <p style="font-size:12px; opacity:0.6;">An original fan-style open-world game. Not affiliated with Rockstar Games.</p>
+</div>
+
+<div id="screen-pause" class="screen hidden">
+  <h2>PAUSED</h2>
+  <p>Take a breath. Solmar City will wait.</p>
+  <div>
+    <button id="btn-resume" class="btn">RESUME</button>
+    <button id="btn-quit" class="btn secondary">QUIT TO MENU</button>
+  </div>
+</div>
+
+<div id="screen-busted" class="screen hidden">
+  <h2>BUSTED</h2>
+  <p>The Solmar PD hauled you in. Mara's people posted bail — but it cost you $150.</p>
+  <div>
+    <button id="btn-busted-restart" class="btn">BACK ON THE STREETS</button>
+    <button id="btn-busted-menu" class="btn secondary">MAIN MENU</button>
+  </div>
+</div>
+
+<div id="screen-wasted" class="screen hidden">
+  <h2>WASTED</h2>
+  <p>You wake up in the Solmar clinic, $100 lighter and twice as angry.</p>
+  <div>
+    <button id="btn-wasted-restart" class="btn">GET BACK UP</button>
+    <button id="btn-wasted-menu" class="btn secondary">MAIN MENU</button>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
